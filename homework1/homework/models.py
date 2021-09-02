@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-
+from torch.nn import Linear
 
 class ClassificationLoss(torch.nn.Module):
     def forward(self, input, target):
@@ -26,7 +26,8 @@ class LinearClassifier(torch.nn.Module):
         """
         Your code here
         """
-        raise NotImplementedError('LinearClassifier.__init__')
+        self.linear1 = Linear(3*64*64, 6)
+        #raise NotImplementedError('LinearClassifier.__init__')
 
     def forward(self, x):
         """
@@ -35,6 +36,7 @@ class LinearClassifier(torch.nn.Module):
         @x: torch.Tensor((B,3,64,64))
         @return: torch.Tensor((B,6))
         """
+        return self.linear1((x.view(x.size(0), -1)))
         raise NotImplementedError('LinearClassifier.forward')
 
 
