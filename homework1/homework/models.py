@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
+from torch import nn
 
 class ClassificationLoss(torch.nn.Module):
     def forward(self, input, target):
@@ -16,6 +17,14 @@ class ClassificationLoss(torch.nn.Module):
 
         Hint: Don't be too fancy, this is a one-liner
         """
+        self.input = input
+        #torch.Size([4,3])
+        self.target = target
+        #torch.Size([4])
+        # print(self.target)
+        self.loss = nn.CrossEntropyLoss()
+        self.output = self.loss(self.input, self.target)
+        return self.output
         raise NotImplementedError('ClassificationLoss.forward')
 
 
