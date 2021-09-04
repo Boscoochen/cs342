@@ -17,12 +17,12 @@ def train(args):
     test_dataloader = load_data(testdata_path, num_workers=0, batch_size=128)
 
     print(model)
-    learning_rate = 1e-2
+    learning_rate = 1e-3
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 10
+    epoch = 20
 
     for i in range(epoch):
       for data in train_dataloader:
@@ -38,19 +38,21 @@ def train(args):
           print("times train: {}, Loss: {}".format(total_train_step,loss))
     
     total_test_loss = 0
-    total_accuracy = 0
+    acc = []
     with torch.no_grad():
       for data in test_dataloader:
         imgs, targets = data
         outputs = model(imgs)
         loss = ClassificationLoss().forward(outputs, targets)
         total_test_loss = total_test_loss + loss
-        acc = accuracy(outputs,targets) 
-        total_accuracy = total_accuracy = acc
+        acc.append(accuracy(outputs,targets)) 
+        
     print("total test loss: {}".format(total_test_loss))
-    return total_accuracy
+    
     #raise NotImplementedError('train')
     save_model(model)
+    print(sum(acc)/len(acc))
+    return sum(acc)/len(acc)
 
 
 if __name__ == '__main__':
