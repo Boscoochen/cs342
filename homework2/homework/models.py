@@ -1,12 +1,14 @@
 import torch
-
-
+from torch import nn
+from torch.nn import Conv2d
 class CNNClassifier(torch.nn.Module):
     def __init__(self):
         """
         Your code here
         """
-        raise NotImplementedError('CNNClassifier.__init__')
+        super(CNNClassifier, self).__init__()
+        self.conv1 = Conv2d(3,6,3,stride=1,padding=0)
+        # raise NotImplementedError('CNNClassifier.__init__')
 
     def forward(self, x):
         """
@@ -14,6 +16,8 @@ class CNNClassifier(torch.nn.Module):
         @x: torch.Tensor((B,3,64,64))
         @return: torch.Tensor((B,6))
         """
+        x = self.conv1(x)
+        return x
         raise NotImplementedError('CNNClassifier.forward')
 
 
