@@ -14,17 +14,29 @@ def test_logging(train_logger, valid_logger):
     """
 
     # This is a strongly simplified training loop
+    step = 0
+    train_acc = []
+    valid_acc = []
     for epoch in range(10):
         torch.manual_seed(epoch)
         for iteration in range(20):
             dummy_train_loss = 0.9**(epoch+iteration/20.)
             dummy_train_accuracy = epoch/10. + torch.randn(10)
-            raise NotImplementedError('Log the training loss')
-        raise NotImplementedError('Log the training accuracy')
+            train_acc.append(sum(dummy_train_accuracy)/len(dummy_train_accuracy))
+            train_logger.add_scalar('loss', dummy_train_loss, step)
+            step = step + 1
+            # raise NotImplementedError('Log the training loss')
+        # print(len(train_acc))
+        train_logger.add_scalar('accuracy', sum(train_acc)/len(train_acc),step)
+        train_acc = []
+        # raise NotImplementedError('Log the training accuracy')
         torch.manual_seed(epoch)
         for iteration in range(10):
             dummy_validation_accuracy = epoch / 10. + torch.randn(10)
-        raise NotImplementedError('Log the validation accuracy')
+            valid_acc.append(sum(dummy_validation_accuracy)/len(dummy_validation_accuracy))
+        valid_logger.add_scalar('accuracy', sum(valid_acc)/len(valid_acc), step)
+        valid_acc = []
+        # raise NotImplementedError('Log the validation accuracy')
 
 
 if __name__ == "__main__":
