@@ -17,12 +17,12 @@ def train(args):
     test_dataloader = load_data(testdata_path, num_workers=0, batch_size=128)
 
     print(model)
-    learning_rate = 1e-3
+    learning_rate = 0.01
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 20
+    epoch = 10
 
     for i in range(epoch):
       for data in train_dataloader:
