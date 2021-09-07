@@ -1,7 +1,9 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
+from torch.nn import ReLU
 from torch import nn
+from torch.nn import BatchNorm2d
 
 class ClassificationLoss(torch.nn.Module):
     def forward(self, input, target):
@@ -56,7 +58,12 @@ class MLPClassifier(torch.nn.Module):
         """
         Your code here
         """
-        raise NotImplementedError('MLPClassifier.__init__')
+        # print("here")
+        self.BN = BatchNorm2d(3)
+        self.linear1 = Linear(3*64*64, 100)
+        self.relu = ReLU()
+        self.linear2 = Linear(100, 6)
+        # raise NotImplementedError('MLPClassifier.__init__')
 
     def forward(self, x):
         """
@@ -65,6 +72,13 @@ class MLPClassifier(torch.nn.Module):
         @x: torch.Tensor((B,3,64,64))
         @return: torch.Tensor((B,6))
         """
+       
+        x = self.BN(x)
+        x = self.linear1((x.view(x.size(0), -1)))
+        x = self.relu(x)
+        x = self.linear2((x.view(x.size(0), -1)))
+
+        return x
         raise NotImplementedError('MLPClassifier.forward')
 
 
