@@ -1,6 +1,10 @@
 import torch
 import torch.nn.functional as F
-
+from torch import nn
+from torch.nn import Conv2d
+from torch.nn import Linear
+from torch.nn import ReLU
+from torch.nn import BatchNorm2d
 
 class CNNClassifier(torch.nn.Module):
     def __init__(self):
@@ -10,7 +14,16 @@ class CNNClassifier(torch.nn.Module):
         Hint: Base this on yours or HW2 master solution if you'd like.
         Hint: Overall model can be similar to HW2, but you likely need some architecture changes (e.g. ResNets)
         """
-        raise NotImplementedError('CNNClassifier.__init__')
+        super(CNNClassifier, self).__init__()
+        self.conv1 = Conv2d(3,64,7,2,3)
+        self.conv1_bn = BatchNorm2d(64)
+        self.relu1 = ReLU()
+        self.maxpool = nn.MaxPool2d(kernel_size=3,stride=2,padding=1)
+        self.conv2_bn = BatchNorm2d(64)
+        self.linear1 = Linear(64*16*16, 150)
+        self.relu2 = ReLU()
+        self.linear2 = Linear(150, 6)
+        # raise NotImplementedError('CNNClassifier.__init__')
 
     def forward(self, x):
         """
@@ -19,6 +32,14 @@ class CNNClassifier(torch.nn.Module):
         @return: torch.Tensor((B,6))
         Hint: Apply input normalization inside the network, to make sure it is applied in the grader
         """
+        x = self.conv1(x)
+        x = self.conv1_bn(x)
+        x = self.relu1(x)
+        x = self.maxpool(x)
+        x = self.conv2_bn(x)
+        x = self.linear1((x.view(x.size(0), -1)))
+        x = self.relu2(x)
+        return self.linear2((x.view(x.size(0), -1)))
         raise NotImplementedError('CNNClassifier.forward')
 
 
