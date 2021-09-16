@@ -3,6 +3,8 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.transforms import functional as F
+import csv
+import os
 
 from . import dense_transforms
 
@@ -22,20 +24,51 @@ class SuperTuxDataset(Dataset):
         Hint: Do not store torch.Tensor's as data here, but use PIL images, torchvision.transforms expects PIL images
               for most transformations.
         """
-        raise NotImplementedError('SuperTuxDataset.__init__')
-
+        self.dataset_path = dataset_path
+        
+        #dataset_path = "data/train/" 
+        self.img_path = []
+        self.main_path = []
+        self.img_label = []
+        
+        label_csv_path = os.path.join(dataset_path, "labels.csv")
+        with open(label_csv_path) as csv_file:
+            csv_reader = csv.reader(csv_file)
+            next(csv_reader)
+            for line in csv_reader:
+                self.img_path.append(line[0])
+                
+                self.img_label.append(LABEL_NAMES.index(line[1]))
+        for path in self.img_path:
+            self.main_path.append(os.path.join(self.dataset_path, path))
+        # raise NotImplementedError('SuperTuxDataset.__init__')
     def __len__(self):
         """
         Your code here
         """
+        return len(self.img_path)
         raise NotImplementedError('SuperTuxDataset.__len__')
 
     def __getitem__(self, idx):
         """
         Your code here
         """
-        raise NotImplementedError('SuperTuxDataset.__getitem__')
-        return img, label
+        img_item_path = self.main_path[idx]
+        img = Image.open(img_item_path)
+        #transforms.Compose([transforms.Resize(3,64,64), transforms.ToTensor(),transforms.Normalize([0],[1])])
+        img_tensor = transforms.Compose([
+          transforms.RandomHorizontalFlip(),
+          transforms.ToTensor(),
+          transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        # trans_totensor = transforms.ToTensor()
+        # img_tensor = trans_totensor(img)
+        img_ten = img_tensor(img)
+        img_ten = img_ten.reshape(3, 64, 64)
+        
+        label = self.img_label[idx]
+        return img_ten, label
+
 
 
 class DenseSuperTuxDataset(Dataset):
