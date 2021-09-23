@@ -43,6 +43,7 @@ class CNNClassifier(torch.nn.Module):
         raise NotImplementedError('CNNClassifier.forward')
 
 
+
 class FCN(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -54,7 +55,35 @@ class FCN(torch.nn.Module):
         Hint: Use residual connections
         Hint: Always pad by kernel_size / 2, use an odd kernel_size
         """
-        raise NotImplementedError('FCN.__init__')
+        self.conv1 = Conv2d(3,6,3,1,1)
+        self.bn1 = BatchNorm2d(6)
+        self.relu1 = ReLU()
+        self.maxpool1 = nn.MaxPool2d(2,2,padding=0, dilation=1)
+
+
+
+
+        self.conv2 = Conv2d(6,32,3,1,1)
+        self.bn2 = BatchNorm2d(32)
+        self.relu2 = ReLU()
+        self.maxpool2 = nn.MaxPool2d(2,2,padding=0, dilation=1)
+
+        self.conv3 = Conv2d(32,64,3,1,1)
+        self.bn3 = BatchNorm2d(64)
+        self.relu3 = ReLU()
+        self.maxpool3 = nn.MaxPool2d(2,2,padding=0, dilation=1)
+        self.upsample_2x_1 = nn.ConvTranspose2d(64, 64, 4, 2, 1, bias=False)
+        self.upsample_2x_2 = nn.ConvTranspose2d(32, 32, 4, 2, 1, bias=False)
+        self.upsample_2x_3 = nn.ConvTranspose2d(5, 5, 4, 2, 1, bias=False)
+        self.conv_trans1 = nn.Conv2d(64, 32, 1)
+        self.conv_trans2 = nn.Conv2d(32, 5, 1)
+
+        self.conv4 = Conv2d(64,64,3,1,1)
+        self.bn4 = BatchNorm2d(64)
+        self.relu4 = ReLU()
+        self.maxpool4 = nn.MaxPool2d(2,2,padding=0, dilation=1)
+        # self.conv2 = Conv2d(64,128,3,1,1)
+        # raise NotImplementedError('FCN.__init__')
 
     def forward(self, x):
         """
@@ -66,6 +95,55 @@ class FCN(torch.nn.Module):
               if required (use z = z[:, :, :H, :W], where H and W are the height and width of a corresponding strided
               convolution
         """
+        count = 0
+        check = True
+        x1 = self.conv1(x)
+        x2 = self.bn1(x1)
+        x3 = self.relu1(x2)
+        if x3.shape[2] != 1 and x3.shape[3] != 1:
+          count += 1
+          x3 = self.maxpool1(x3)
+        x5 = self.conv2(x3)
+        x6 = self.bn2(x5)
+        x7 = self.relu2(x6)
+        if x7.shape[2] != 1 and x7.shape[3] != 1:
+          count += 1
+          x7 = self.maxpool2(x7)
+        x9 = self.conv3(x7)
+        x10 = self.bn3(x9)
+        x11 = self.relu3(x10)
+        if x11.shape[2] != 1 and x11.shape[3] != 1:
+          count += 1
+          x11 = self.maxpool3(x11)
+        x13 = self.conv4(x11)
+        x14 = self.bn4(x13)
+        x15 = self.relu4(x14)
+        if x15.shape[2] != 1 and x15.shape[3] != 1:
+          count += 1
+          x15 = self.maxpool4(x15)
+        if count != 0:
+          x15 = self.upsample_2x_1(x15)
+          count -= 1
+        if x15.shape == x11.shape:
+          # print("in1")
+          x15 = x15 + x11
+        x15 = self.conv_trans1(x15)
+        if count != 0:
+          x15 = self.upsample_2x_2(x15)
+          count -= 1
+        if x15.shape == x7.shape:
+          # print("in2")
+          x15 = x15 + x7
+        x15 = self.conv_trans2(x15)
+        if count != 0:
+          x15 = self.upsample_2x_3(x15)
+          count -= 1
+        if count != 0:
+          x15 = self.upsample_2x_3(x15)
+          count -= 1
+
+        return x15
+
         raise NotImplementedError('FCN.forward')
 
 
