@@ -44,7 +44,7 @@ def train(args):
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 15
+    epoch = 10
 
     for i in range(epoch):
       model.train()
