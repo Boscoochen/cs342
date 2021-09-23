@@ -57,7 +57,7 @@ class FCN(torch.nn.Module):
         """
         self.conv1 = Conv2d(3,6,3,1,1)
         self.bn1 = BatchNorm2d(6)
-        self.relu1 = ReLU()
+        self.relu1 = ReLU(inplace=True)
         self.maxpool1 = nn.MaxPool2d(2,2,padding=0, dilation=1)
 
 
@@ -65,12 +65,12 @@ class FCN(torch.nn.Module):
 
         self.conv2 = Conv2d(6,32,3,1,1)
         self.bn2 = BatchNorm2d(32)
-        self.relu2 = ReLU()
+        self.relu2 = ReLU(inplace=True)
         self.maxpool2 = nn.MaxPool2d(2,2,padding=0, dilation=1)
 
         self.conv3 = Conv2d(32,64,3,1,1)
         self.bn3 = BatchNorm2d(64)
-        self.relu3 = ReLU()
+        self.relu3 = ReLU(inplace=True)
         self.maxpool3 = nn.MaxPool2d(2,2,padding=0, dilation=1)
         self.upsample_2x_1 = nn.ConvTranspose2d(64, 64, 4, 2, 1, bias=False)
         self.upsample_2x_2 = nn.ConvTranspose2d(32, 32, 4, 2, 1, bias=False)
@@ -80,7 +80,7 @@ class FCN(torch.nn.Module):
 
         self.conv4 = Conv2d(64,64,3,1,1)
         self.bn4 = BatchNorm2d(64)
-        self.relu4 = ReLU()
+        self.relu4 = ReLU(inplace=True)
         self.maxpool4 = nn.MaxPool2d(2,2,padding=0, dilation=1)
         # self.conv2 = Conv2d(64,128,3,1,1)
         # raise NotImplementedError('FCN.__init__')
@@ -141,7 +141,7 @@ class FCN(torch.nn.Module):
         if count != 0:
           x15 = self.upsample_2x_3(x15)
           count -= 1
-
+        x15 = self.relu4(x15)
         return x15
 
         raise NotImplementedError('FCN.forward')
