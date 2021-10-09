@@ -4,10 +4,12 @@ import torch
 import torchvision
 import torch.utils.tensorboard as tb
 import torch.nn as nn
+from torchvision import transforms
 
 def train(args):
     from os import path
-    model = CNNClassifier()
+    device = torch.device('cuda')
+    model = CNNClassifier().to(device)
     train_logger, valid_logger = None, None
     if args.log_dir is not None:
         train_logger = tb.SummaryWriter(path.join(args.log_dir, 'train'), flush_secs=1)
@@ -25,22 +27,27 @@ def train(args):
     train_dataloader = load_data(traindata_path, num_workers=0, batch_size=128)
     test_dataloader = load_data(testdata_path, num_workers=0, batch_size=128)
 
-    print(train_dataloader)
-    print(test_dataloader)
+    # print(train_dataloader)
+    # print(test_dataloader)
 
 
-    print(model)
-    learning_rate = 0.01
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    # print(model)
+    learning_rate = 0.001
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 15
+    epoch = 1
 
     for i in range(epoch):
       model.train()
       for data in train_dataloader:
         imgs, targets = data
+        transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip()
+        ])
+        imgs, targets = imgs.to(device), targets.to(device)
         # print(len(targets))
         # print(imgs.shape)
         #torch.Size([128, 3, 64, 64])
@@ -65,6 +72,7 @@ def train(args):
     with torch.no_grad():
       for data in test_dataloader:
         imgs, targets = data
+        imgs, targets = imgs.to(device), targets.to(device)
         outputs = model(imgs)
         # outputs = outputs.view(outputs.size(0), -1)
         loss = loss_fun(outputs, targets)
