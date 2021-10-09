@@ -6,13 +6,14 @@ from .utils import load_dense_data, DENSE_CLASS_DISTRIBUTION, ConfusionMatrix
 from . import dense_transforms
 import torch.utils.tensorboard as tb
 from torch import nn
+from torchvision import transforms
 
 
 def train(args):
     from os import path
-    device1 = torch.device("cuda")
-    device2 = torch.device("cpu")
-    model = FCN()
+    device = torch.device("cuda")
+
+    model = FCN().to(device)
     train_logger, valid_logger = None, None
     if args.log_dir is not None:
         train_logger = tb.SummaryWriter(path.join(args.log_dir, 'train'), flush_secs=1)
@@ -30,7 +31,7 @@ def train(args):
     traindata_path = "dense_data/train"
     testdata_path = "dense_data/valid"
 
-    loss_fun = nn.CrossEntropyLoss().to(device1)
+    loss_fun = nn.CrossEntropyLoss()
     train_dataloader = load_dense_data(traindata_path, num_workers=4, batch_size=32)
     test_dataloader = load_dense_data(testdata_path, num_workers=4, batch_size=32)
 
@@ -39,37 +40,30 @@ def train(args):
 
 
     # print(model)
-    learning_rate = 0.005
+    learning_rate = 0.001
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 10
+    epoch = 1
 
     for i in range(epoch):
       model.train()
       for data in train_dataloader:
         imgs, targets = data
-        # print(type(imgs))
-        # print(len(targets))
-        # print(imgs.shape)
-        #torch.Size([128, 3, 64, 64])
-        outputs = model(imgs).to(device1)
-        #torch.Size([128, 6, 62, 62])
-        # print(outputs.shape)
-        # outputs = outputs.view(outputs.size(0), -1)
-        # print(outputs.shape)
-        targets =targets.long().to(device2)
+        transform = dense_transforms.RandomHorizontalFlip()
+        transform2 = transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5)
+        imgs = transform2(imgs)
+        imgs, targets = transform(imgs, targets)
+        imgs, targets = imgs.to(device), targets.long().to(device)
+        outputs = model(imgs)
         
-        
-        targets = targets.to(device1)
         loss = loss_fun(outputs, targets)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         total_train_step = total_train_step + 1
-        # print(total_train_step)
         if total_train_step % 100 == 0:
           print("times train: {}, Loss: {}".format(total_train_step,loss))
     
@@ -80,10 +74,8 @@ def train(args):
     with torch.no_grad():
       for data in test_dataloader:
         imgs, targets = data
-        outputs = model(imgs).to(device1)
-        # outputs = outputs.view(outputs.size(0), -1)
-        targets = targets.long().to(device2)
-        targets = targets.to(device1)
+        imgs, targets = imgs.to(device), targets.long().to(device)
+        outputs = model(imgs)
         loss = loss_fun(outputs, targets)
         total_test_loss = total_test_loss + loss
         confusion.add(outputs.argmax(1), targets)
