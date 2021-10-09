@@ -56,15 +56,11 @@ class SuperTuxDataset(Dataset):
         img_item_path = self.main_path[idx]
         img = Image.open(img_item_path)
         #transforms.Compose([transforms.Resize(3,64,64), transforms.ToTensor(),transforms.Normalize([0],[1])])
-        img_tensor = transforms.Compose([
-          transforms.RandomHorizontalFlip(),
-          transforms.ToTensor(),
-          transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        img_tensor = transforms.ToTensor()
         # trans_totensor = transforms.ToTensor()
         # img_tensor = trans_totensor(img)
         img_ten = img_tensor(img)
-        img_ten = img_ten.reshape(3, 64, 64)
+        # img_ten = img_ten.reshape(3, 64, 64)
         
         label = self.img_label[idx]
         return img_ten, label
