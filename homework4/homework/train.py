@@ -1,10 +1,12 @@
 import torch
 import numpy as np
-
+import torch.nn.functional as F
 from .models import Detector, save_model
 from .utils import load_detection_data
 from . import dense_transforms
 import torch.utils.tensorboard as tb
+from torch import nn
+
 
 def train(args):
     from os import path
@@ -21,88 +23,74 @@ def train(args):
     """
     traindata_path = "dense_data/train"
     testdata_path = "dense_data/valid"
+    dense = [0.02929112, 0.0044619, 0.00411153]
+    # w = torch.as_tensor(dense)
+    dense_sum = sum(dense)
+    for i in range(3):
+      dense[i] = (1 - dense[i]) / dense[i]
+    w1 = torch.full((96,128), 0.02929112)
+    w1 = w1.unsqueeze(dim=2)
+    w2 = torch.full((96,128), 0.0044619)
+    w2 = w2.unsqueeze(dim=2)
+    w3 = torch.full((96,128), 0.00411153)
+    w3 = w3.unsqueeze(dim=2)
+    w = torch.cat([w1, w2, w3], dim=2)
+    w = w.permute(2,0,1)
+    # print(sum(dense))
+    print(dense)
+
+    pred_class = torch.rand (3,96,128)
+    for j in range(3):
+      pred_class[j] = dense[j]
+    
+    print(pred_class.shape)
+    print(pred_class)
+    
+
+
+
+    BCELogLoss =torch.nn.BCEWithLogitsLoss(pos_weight=pred_class).to(device)
     # loss_fun = nn.CrossEntropyLoss()
-    train_dataloader = load_detection_data(traindata_path)
-    test_dataloader = load_detection_data(testdata_path)
+    transform = dense_transforms.Compose([
+      dense_transforms.ColorJitter(0.9, 0.9, 0.9, 0.1),
+      dense_transforms.RandomHorizontalFlip(),
+      dense_transforms.ToTensor(),
+      dense_transforms.ToHeatmap()
+    ])
 
-    model_dict = model.state_dict()
-    model.load_state_dict(model_dict)
+    train_dataloader = load_detection_data(traindata_path,num_workers=4,transform=transform)
 
-    print(type(train_dataloader.dataset))
-    # train_np = torch.tensor(np.array(train_dataloader.dataset[1:4]))
-    # print(train_dataloader)
-    # print(test_dataloader)
 
-    # print(model)
-    # learning_rate = 0.001
-    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    learning_rate = 0.001
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,weight_decay=1e-5)
 
     total_train_step = 0
     total_test_step = 0
-    epoch = 1
-    count = 0
+    epoch = 20
+
     for i in range(epoch):
       model.train()
-      for data in train_dataloader.dataset:
-        im, karts, bombs, pickup = data
-        # print(type(im))
-        # print(type(karts))
-        # print(type(bombs))
-        # print(type(pickup))
-        # break
-        im, karts, bombs, pickup = im.to(device),torch.from_numpy(karts.astype(float)).to(device),torch.from_numpy(bombs.astype(float)).to(device),torch.from_numpy(pickup.astype(float)).to(device)
-        
-        # print("im size",im.shape)
-        # print("karts size",karts.shape)
-        # print("bombs size",bombs.shape)
-        # print("pickup size",pickup.shape)
-        # count+=1
-        # print("//")
-        # if count == 10:
-        #   break
-    #     transform = dense_transforms.RandomHorizontalFlip()
-    #     transform2 = transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5)
-    #     imgs = transform2(imgs)
-    #     imgs, targets = transform(imgs, targets)
-    #     imgs, targets = imgs.to(device), targets.long().to(device)
-        # outputs = model(a[None,:])
-        det = torch.cat((karts, bombs, pickup), 0)
-        det = det.cpu().numpy()
-        t = dense_transforms.ToHeatmap()
-        image, heatmap, size = t(im,det)
-        print(heatmap)
-        image = model(im[None,:])
- 
-        
-        image = image.permute(0,1,2,3)[-1,:,:,:]
-        det_heatmap = model.detect(image)
-        # t = dense_transforms.ToHeatmap()
-        # image, heatmap, size = t(image,det)
-        # print(heatmap)
-
-    #     loss = loss_fun(outputs, targets)
-
-    #     optimizer.zero_grad()
-    #     loss.backward()
-    #     optimizer.step()
-    #     total_train_step = total_train_step + 1
-    #     if total_train_step % 100 == 0:
-    #       print("times train: {}, Loss: {}".format(total_train_step,loss))
+      for data in train_dataloader:
+        image, label, size = data
+        image, label, size = image.to(device),label.to(device),size.to(device)
+        outputs = model(image)
+        # b,c,h,w = outputs.shape
+        # for batch in range(b):
+        #   c1,c2,c3 = model.detect(outputs[batch])
+        m = nn.Sigmoid()
+        # loss = BCELoss(m(outputs), label)
+        # outputs = outputs.permute(0,2,3,1)
+        # label = label.permute(0,2,3,1)
+        # label = label.permute(1,2,3,0)[:,:,:,-1]
+        # print(label.shape)
+        loss = BCELogLoss(outputs, label)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        total_train_step = total_train_step + 1
+        if total_train_step % 100 == 0:
+          print("times train: {}, Loss: {}".format(total_train_step,loss))
     
-    # model.eval()
-    # total_test_loss = 0
-    # with torch.no_grad():
-    #   for data in test_dataloader:
-    #     imgs, targets = data
-    #     imgs, targets = imgs.to(device), targets.long().to(device)
-    #     outputs = model(imgs)
-    #     loss = loss_fun(outputs, targets)
-    #     total_test_loss = total_test_loss + loss
-        
-        
-    # print("total test loss: {}".format(total_test_loss))
-    
-
     save_model(model)
 
 def log(logger, imgs, gt_det, det, global_step):
