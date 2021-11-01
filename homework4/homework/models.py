@@ -8,6 +8,39 @@ from torch.nn import ReLU
 from torch.nn import BatchNorm2d
 from torchvision import transforms
 from . import dense_transforms
+class CNNClassifier(torch.nn.Module):
+    class Block(torch.nn.Module):
+        def __init__(self, n_input, n_output, kernel_size=3, stride=2):
+            super().__init__()
+            self.c1 = torch.nn.Conv2d(n_input, n_output, kernel_size=kernel_size, padding=kernel_size // 2,
+                                      stride=stride, bias=False)
+            self.c2 = torch.nn.Conv2d(n_output, n_output, kernel_size=kernel_size, padding=kernel_size // 2, bias=False)
+            self.c3 = torch.nn.Conv2d(n_output, n_output, kernel_size=kernel_size, padding=kernel_size // 2, bias=False)
+            self.b1 = torch.nn.BatchNorm2d(n_output)
+            self.b2 = torch.nn.BatchNorm2d(n_output)
+            self.b3 = torch.nn.BatchNorm2d(n_output)
+            self.skip = torch.nn.Conv2d(n_input, n_output, kernel_size=1, stride=stride)
+
+        def forward(self, x):
+            return F.relu(self.b3(self.c3(F.relu(self.b2(self.c2(F.relu(self.b1(self.c1(x)))))))) + self.skip(x))
+
+    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=6, kernel_size=3):
+        super().__init__()
+        self.input_mean = torch.Tensor([0.3235, 0.3310, 0.3445])
+        self.input_std = torch.Tensor([0.2533, 0.2224, 0.2483])
+
+        L = []
+        c = 3
+        for l in layers:
+            L.append(self.Block(c, l, kernel_size, 2))
+            c = l
+        self.network = torch.nn.Sequential(*L)
+        self.classifier = torch.nn.Linear(c, n_output_channels)
+
+    def forward(self, x):
+        z = self.network((x - self.input_mean[None, :, None, None].to(x.device)) / self.input_std[None, :, None, None].to(x.device))
+        return self.classifier(z.mean(dim=[2, 3]))
+
 def _gather_feat(feat, ind, mask=None):
     dim  = feat.size(2)
     ind  = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
@@ -29,34 +62,21 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
                 heatmap value at the peak. Return no more than max_det peaks per image
     """
 
-    # print(type(heatmap))
-    #150 * 100,  10*10,  54*123, 100*100
+
     count = 0
     temp_map = heatmap
-    # print("heatmap size", heatmap.shape)
-    # v1, indices1 = torch.topk(temp_map.flatten(), k=k,largest=True)
-
-    # indices1 = torch.tensor(np.array(np.unravel_index(indices1.numpy(), temp_map.shape)).T)
-
-    # print(temp_map.shape)
-    # print(max_det)
-    # print(max_pool_ks)
-    # print(min_score)
     k=0
     if max_det >= heatmap.shape[0]*heatmap.shape[1]:
       k = heatmap.shape[0]*heatmap.shape[1]
     else:
       k = max_det
-    # print("k", k)
     pad = (max_pool_ks-1)//2
     heatmap = heatmap[None, None, :]
     hmax = F.max_pool2d(heatmap, (max_pool_ks,max_pool_ks),stride=1,padding=pad)
     keep = (hmax == heatmap)
-    # print("hmax size", hmax.shape)
-    # print("heatmap size", heatmap.shape)
+
     keep = heatmap*keep
-    # print(keep)
-    
+
     batch, cat, height, width = keep.size()
     topk_scores, topk_inds = torch.topk(keep.view(batch, cat, -1), k)
     topk_inds = topk_inds % (height * width)
@@ -69,25 +89,17 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, k)
     topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, k)
 
-    # print("topk_score", topk_score.shape)
-    # print("topk_ys", topk_ys.shape)
-    # print("topk_xs", topk_xs.shape)
-    # keep = keep.reshape(keep.shape[2],keep.shape[3])
-
-    # v, indices = torch.topk(keep.flatten(), k=k,largest=True)
-    # indices = torch.tensor(np.array(np.unravel_index(indices.numpy(), keep.shape)).T)
-   
 
     small_container = []
     large_container = []
-    # print(len(v))
-    # print(len(topk_score[0]))
+
     for i in range(len(topk_score[0])):
       if topk_score[0][i] > min_score:
-        small_container.append(topk_score[0][i].float())
-        small_container.append(topk_xs[0][i].int())
-        small_container.append(topk_ys[0][i].int())
-        large_container.append(small_container)
+        small_container.append(topk_score[0][i].float().item())
+        small_container.append(topk_xs[0][i].int().item())
+        small_container.append(topk_ys[0][i].int().item())
+        t1 = tuple(small_container)
+        large_container.append(t1)
         small_container=[]
 
    
@@ -97,178 +109,52 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     raise NotImplementedError('extract_peak')
 
 class Detector(torch.nn.Module):
-    def __init__(self):
-        """
-           Your code here.
-           Setup your detection network
-        """
+    class UpBlock(torch.nn.Module):
+        def __init__(self, n_input, n_output, kernel_size=3, stride=2):
+            super().__init__()
+            self.c1 = torch.nn.ConvTranspose2d(n_input, n_output, kernel_size=kernel_size, padding=kernel_size // 2,
+                                      stride=stride, output_padding=1)
+
+        def forward(self, x):
+            return F.relu(self.c1(x))
+
+    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=3, kernel_size=3, use_skip=True):
         super().__init__()
-        self.conv1 = Conv2d(3,64,3,1,1)
-        self.bn1 = BatchNorm2d(64)
-        self.relu1 = ReLU()
-        self.conv2 = Conv2d(64,64,3,1,1)
-        self.bn2 = BatchNorm2d(64)
-        self.relu2 = ReLU()
-        self.maxpool1 = nn.MaxPool2d(2,2,padding=0, dilation=1)
+        self.input_mean = torch.Tensor([0.2788, 0.2657, 0.2629])
+        self.input_std = torch.Tensor([0.2064, 0.1944, 0.2252])
 
-        self.conv3 = Conv2d(64,128,3,1,1)
-        self.bn3 = BatchNorm2d(128)
-        self.relu3 = ReLU()
-        self.conv4 = Conv2d(128,128,3,1,1)
-        self.bn4 = BatchNorm2d(128)
-        self.relu4 = ReLU()
-        self.maxpool2 = nn.MaxPool2d(2,2,padding=0, dilation=1)
-
-        self.conv5 = Conv2d(128,256,3,1,1)
-        self.bn5 = BatchNorm2d(256)
-        self.relu5 = ReLU()
-        self.conv6 = Conv2d(256,256,3,1,1)
-        self.bn6 = BatchNorm2d(256)
-        self.relu6 = ReLU()
-        self.conv7 = Conv2d(256,256,3,1,1)
-        self.bn7 = BatchNorm2d(256)
-        self.relu7 = ReLU()
-        self.maxpool3 = nn.MaxPool2d(2,2,padding=0, dilation=1)
-
-        
-
-        self.conv8 = Conv2d(256,512,3,1,1)
-        self.bn8 = BatchNorm2d(512)
-        self.relu8 = ReLU()
-        self.conv9 = Conv2d(512,512,3,1,1)
-        self.bn9 = BatchNorm2d(512)
-        self.relu9 = ReLU()
-        self.conv10 = Conv2d(512,512,3,1,1)
-        self.bn10 = BatchNorm2d(512)
-        self.relu10 = ReLU()
-        self.maxpool4 = nn.MaxPool2d(2,2,padding=0, dilation=1)
-        
-
-        self.conv11 = Conv2d(512,512,3,1,1)
-        self.bn11 = BatchNorm2d(512)
-        self.relu11 = ReLU()
-        self.conv12 = Conv2d(512,512,3,1,1)
-        self.bn12 = BatchNorm2d(512)
-        self.relu12 = ReLU()
-        self.conv13 = Conv2d(512,512,3,1,1)
-        self.bn13 = BatchNorm2d(512)
-        self.relu13 = ReLU()
-        self.maxpool5 = nn.MaxPool2d(2,2,padding=0, dilation=1)
-
-        self.conv_trans1 = nn.Conv2d(512, 256, 1)
-        self.conv_trans2 = nn.Conv2d(256, 3, 1)
-        self.upsample_2x = nn.ConvTranspose2d(512, 512, 4, 2, 1,output_padding=(1,0), bias=False)
-        self.upsample_2x_no_outpadding = nn.ConvTranspose2d(512, 512, 4, 2, 1, bias=False)
-        self.upsample_2x_1 = nn.ConvTranspose2d(256, 256, 4, 2, 1, bias=False)
-        self.upsample_2x_2 = nn.ConvTranspose2d(3, 3, 16, 8, 4, bias=False)
-        self.upsample_2x_2_1 = nn.ConvTranspose2d(3, 3, 8, 4, 2, bias=False)
-        self.upsample_2x_2_2 = nn.ConvTranspose2d(3, 3, 4, 2, 1, bias=False)
-        self.upsample_8x = nn.ConvTranspose2d(3, 3, 16, 8, 4, bias=False)
-        
+        c = 3
+        self.use_skip = use_skip
+        self.n_conv = len(layers)
+        skip_layer_size = [3] + layers[:-1]
+        for i, l in enumerate(layers):
+            self.add_module('conv%d' % i, CNNClassifier.Block(c, l, kernel_size, 2))
+            c = l
+        for i, l in list(enumerate(layers))[::-1]:
+            self.add_module('upconv%d' % i, self.UpBlock(c, l, kernel_size, 2))
+            c = l
+            if self.use_skip:
+                c += skip_layer_size[i]
+        self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
 
     def forward(self, x):
-        """
-           Your code here.
-           Implement a forward pass through the network, use forward for training,
-           and detect for detection
-        """
-        count = 0
-        check = True
-        #1,3,16,16
-        # print(x.shape)
-        transform = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        x = transform(x)
-        x1 = self.conv1(x)
-        x2 = self.bn1(x1)
-        x3 = self.relu1(x2)
-        x4 = self.conv2(x3)
-        x5 = self.bn2(x4)
-        x6 = self.relu2(x5)
-        if x6.shape[2] != 1 and x6.shape[3] != 1:
-          count += 1
-          x6 = self.maxpool1(x6)
+        z = (x - self.input_mean[None, :, None, None].to(x.device)) / self.input_std[None, :, None, None].to(x.device)
+        up_activation = []
+        for i in range(self.n_conv):
+            # Add all the information required for skip connections
+            up_activation.append(z)
+            z = self._modules['conv%d'%i](z)
 
-        x7 = self.conv3(x6)
-        x8 = self.bn3(x7)
-        x9 = self.relu3(x8)
-        x10 = self.conv4(x9)
-        x11 = self.bn4(x10)
-        x12 = self.relu4(x11)
-        if x12.shape[2] != 1 and x12.shape[3] != 1:
-          count += 1
-          x12 = self.maxpool2(x12)
-        #1,64,2,2
-        x13 = self.conv5(x12)
-        x14 = self.bn5(x13)
-        x15 = self.relu5(x14)
-        x16 = self.conv6(x15)
-        x17 = self.bn6(x16)
-        x18 = self.relu6(x17)
-        x19 = self.conv7(x18)
-        x20 = self.bn7(x19)
-        x21 = self.relu7(x20)
-        if x21.shape[2] != 1 and x21.shape[3] != 1:
-          count += 1
-          x21 = self.maxpool3(x21)
-        # print(x15.shape)
-        #1,128,1,1
-
-        x22 = self.conv8(x21)
-        x23 = self.bn8(x22)
-        x24 = self.relu8(x23)
-        x25 = self.conv9(x24)
-        x26 = self.bn9(x25)
-        x27 = self.relu9(x26)
-        x28 = self.conv10(x27)
-        x29 = self.bn10(x28)
-        x30 = self.relu10(x29)
-        if x30.shape[2] != 1 and x30.shape[3] != 1:
-          count += 1
-          x30 = self.maxpool4(x30)
+        for i in reversed(range(self.n_conv)):
+            z = self._modules['upconv%d'%i](z)
+            # Fix the padding
+            z = z[:, :, :up_activation[i].size(2), :up_activation[i].size(3)]
+            # Add the skip connection
+            if self.use_skip:
+                z = torch.cat([z, up_activation[i]], dim=1)
+        z = self.classifier(z)
         
-
-        x31 = self.conv11(x30)
-        x32 = self.bn11(x31)
-        x33 = self.relu11(x32)
-        x34 = self.conv12(x33)
-        x35 = self.bn12(x34)
-        x36 = self.relu12(x35)
-        x37 = self.conv13(x36)
-        x38 = self.bn13(x37)
-        x39 = self.relu13(x38)
-        if x39.shape[2] != 1 and x39.shape[3] != 1:
-          count += 1
-          x39 = self.maxpool5(x39)
-        
-
-        if count != 0:
-            x39 = self.upsample_2x_no_outpadding(x39)
-            count -= 1
-            
-            
-        if x39.shape == x30.shape:
-            x39 = x39 + x30
-        x39 = self.conv_trans1(x39)
-        # print(add1.shape)
-        if count!= 0:
-            x39 = self.upsample_2x_1(x39)
-            count -= 1
-        # print(add1.shape)
-        if x39.shape == x21.shape:
-            x39 = x39 + x21
-        x39 = self.conv_trans2(x39)
-        # print(x33.shape)
-        if count != 0:
-          if count == 3:
-              x39 = self.upsample_2x_2(x39)
-              count -= 1
-          elif count == 2:
-              x39 = self.upsample_2x_2_1(x39)
-              count -= 1
-          elif count == 1:
-              x39 = self.upsample_2x_2_2(x39)
-        return x39
-        raise NotImplementedError('Detector.forward')
+        return z
 
     def detect(self, image):
         """
@@ -283,12 +169,28 @@ class Detector(torch.nn.Module):
                  scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
                  out of memory.
         """
-        
         # image = image.permute(1,2,0)[:,:,-1]
-        for i in range(image.shape[0]):
-          list_of_peaks= extract_peak(image[0])
-
+        image = self.forward(image[None,:])
         
+
+        huge_container = []
+        small_container = []
+        b,c,h,w = image.shape
+        for batch in range(b):
+          for i in range(c):
+            list_of_peaks= extract_peak(image[batch][i])
+            for j in range(30):
+              my_tuple = list(list_of_peaks[j])
+              # print(type(0.0))
+              my_tuple.extend([0.0,0.0])
+              my_tuple = tuple(my_tuple)
+              small_container.append(my_tuple)
+            huge_container.append(small_container)
+            small_container=[]
+        # print(huge_container[0])
+        # print(huge_container[1])
+        # print(huge_container[2])
+        return huge_container[0],huge_container[1],huge_container[2]
 
 def save_model(model):
     from torch import save
